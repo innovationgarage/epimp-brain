@@ -20,23 +20,34 @@ while True:
     hsv = cv2.cvtColor(thresh, cv2.COLOR_BGR2HSV)
     mask = np.zeros((thresh.shape[0], thresh.shape[1], 3), np.uint8)
 
-    greenLower = (29, 86, 6)
-    greenUpper = (64, 255, 255)
+    #definig the range of red color
+    redLower=np.array([0,10,70],np.uint8)
+    redUpper=np.array([20,255,255],np.uint8)
 
-    redLower = (0,10,70)
-    redUpper = (40,255,255)
+    #defining the Range of Blue color
+    blueLower=np.array([90,10,70],np.uint8)
+    blueUpper=np.array([210,255,255],np.uint8)
+	
+    #defining the Range of yellow color
+    yellowLower=np.array([22,60,200],np.uint8)
+    yellowUpper=np.array([60,255,255],np.uint8)
 
     redMask = cv2.inRange(hsv, redLower, redUpper)
     redMask = cv2.erode(redMask, None, iterations=2)
     redMask = cv2.dilate(redMask, None, iterations=2)
     
-    greenMask = cv2.inRange(hsv, greenLower, greenUpper)
-    greenMask = cv2.erode(greenMask, None, iterations=2)
-    greenMask = cv2.dilate(greenMask, None, iterations=2)
+    yellowMask = cv2.inRange(hsv, yellowLower, yellowUpper)
+    yellowMask = cv2.erode(yellowMask, None, iterations=2)
+    yellowMask = cv2.dilate(yellowMask, None, iterations=2)
 
-    target = cv2.bitwise_or(redMask, greenMask)
-    target = greenMask
-#    target = cv2.bitwise_and(img,img, mask=colorMask)
+    blueMask = cv2.inRange(hsv, blueLower, blueUpper)
+    blueMask = cv2.erode(blueMask, None, iterations=2)
+    blueMask = cv2.dilate(blueMask, None, iterations=2)
+
+    RYMask = cv2.bitwise_or(redMask, yellowMask)
+    RYBMask = cv2.bitwise_or(RYMask, blueMask)
+
+    target = RYBMask
     
     image = cv2.erode(target, None, iterations=2)
     image = cv2.dilate(target, None, iterations=2)
@@ -56,12 +67,14 @@ while True:
             bbox = (x, y, w, h)
             ok = tracker.init(img, bbox)
             cv2.rectangle(mask,(x,y), (x+w, y+h), (0,255,0), 2)
+            cv2.rectangle(blurred,(x,y), (x+w, y+h), (0,255,0), 2)
         else:
             ok, bbox = tracker.update(img)
             if ok:
                 p1 = (int(bbox[0]), int(bbox[1]))
                 p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
                 cv2.rectangle(mask,p1, p2, (0,255,0), 2)
+                cv2.rectangle(blurred,p1, p2, (0,255,0), 2)
             else:
                 bbox = None
     else:
