@@ -5,11 +5,11 @@ from coco_classes import classes
 collect_classes = ["bottle", "frisbee"]
 avoid_classes = ["person", "bird", "cat", "dog", "backpack", "umbrella", "handbag", "cell phone"]
 
-# frozen_weights = "ssd_mobilenet_v1_ppn_shared_box_predictor_300x300_coco14_sync_2018_07_03/frozen_inference_graph.pb"
-# model_config = "ssd_mobilenet_v1_ppn_coco.pbtxt"
+# frozen_weights = "TFModels/ssd_mobilenet_v1_ppn_shared_box_predictor_300x300_coco14_sync_2018_07_03/frozen_inference_graph.pb"
+# model_config = "TFModels/ssd_mobilenet_v1_ppn_coco.pbtxt"
 
-frozen_weights = "faster_rcnn_inception_v2_coco_2018_01_28/frozen_inference_graph.pb"
-model_config = "faster_rcnn_inception_v2_coco_2018_01_28.pbtxt"
+frozen_weights = "TFModels/faster_rcnn_inception_v2_coco_2018_01_28/frozen_inference_graph.pb"
+model_config = "TFModels/faster_rcnn_inception_v2_coco_2018_01_28.pbtxt"
 
 cvNet = cv.dnn.readNetFromTensorflow(frozen_weights, model_config)
 
