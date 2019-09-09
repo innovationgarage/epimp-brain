@@ -1,7 +1,8 @@
-import libjevois as jevois
-import cv2 as cv
+import cv2
 import numpy as np
 import sys
+import time
+import serial
 
 ## Object detection and recognition using OpenCV Deep Neural Networks (DNN)
 #
@@ -56,7 +57,7 @@ import sys
 # @distribution Unrestricted
 # @restrictions None
 # @ingroup modules
-class GarbageTracker:
+class GarbageTracker(object):
     # ####################################################################################################
     ## Constructor
     def __init__(self):
@@ -68,7 +69,7 @@ class GarbageTracker:
         self.mean = [127.5, 127.5, 127.5] # Mean BGR value subtracted from input image
         self.rgb = True          # True if model expects RGB inputs, otherwise it expects BGR
         self.bbox = None
-        self.tracker = cv.TrackerKCF_create()
+#        self.tracker = cv2.TrackerKCF_create()
 
         # Select one of the models:
         #model = 'Face'              # OpenCV Face Detector, Caffe model
@@ -79,8 +80,8 @@ class GarbageTracker:
         #model = 'YOLOv2'           # Darknet Tiny YOLO v2 trained on Pascal VOC (20 object classes), Darknet model
 
         # You should not have to edit anything beyond this point.
-        backend = cv.dnn.DNN_BACKEND_DEFAULT
-        target = cv.dnn.DNN_TARGET_CPU
+        backend = cv2.dnn.DNN_BACKEND_DEFAULT
+        target = cv2.dnn.DNN_TARGET_CPU
         self.classes = None
         classnames = None
         if (model == 'MobileNetSSD'):
@@ -93,9 +94,9 @@ class GarbageTracker:
             modelname = '/jevois/share/opencv-dnn/detection/ssd_mobilenet_v2_coco_2018_03_29.pb'
             configname = '/jevois/share/opencv-dnn/detection/ssd_mobilenet_v2_coco_2018_03_29.pbtxt'
         elif (model == 'MobileNetSSDcoco'):
-            classnames = '/jevois/share/darknet/yolo/data/coconew.names'
-            modelname = '/jevois/share/opencv-dnn/detection/ssd_mobilenet_v1_coco_2017_11_17.pb'
-            configname = '/jevois/share/opencv-dnn/detection/ssd_mobilenet_v1_coco_2017_11_17.pbtxt'
+            classnames = 'TFModels/coconew.names'
+            modelname = 'TFModels/ssd_mobilenet_v1_coco_2017_11_17.pb'
+            configname = 'TFModels/ssd_mobilenet_v1_coco_2017_11_17.pbtxt'
             self.rgb = False
             self.nmsThreshold = 0.1
         elif (model == 'YOLOv3'):
@@ -122,10 +123,9 @@ class GarbageTracker:
                 self.classes = f.read().rstrip('\n').split('\n')
         
         # Load a network
-        self.net = cv.dnn.readNet(modelname, configname)
+        self.net = cv2.dnn.readNet(modelname, configname)
         self.net.setPreferableBackend(backend)
         self.net.setPreferableTarget(target)
-        self.timer = jevois.Timer('Neural detection', 10, jevois.LOG_DEBUG)
         self.model = model
         garbageclasses = ["shoe", "hat", "eye glasses", "frisbee",
             "bottle", "plate", "wine glass", "cup", "fork", "spoon", "bowl",
@@ -169,7 +169,7 @@ class GarbageTracker:
 
         def drawPred(classId, conf, left, top, right, bottom, color=(0,255,0)):
             # Draw a bounding box.
-            cv.rectangle(frame, (left, top), (right, bottom), color, 2)
+            cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
             label = '%.2f' % (conf * 100)
 
             # Print a label of class.
@@ -179,38 +179,36 @@ class GarbageTracker:
                 else:
                     label = '%s: %s' % (self.classes[classId], label)
                         
-            labelSize, baseLine = cv.getTextSize(label, cv.FONT_HERSHEY_SIMPLEX, 0.4, 1)
+            labelSize, baseLine = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1)
             top = max(top, labelSize[1])
-            cv.rectangle(frame, (left, top - labelSize[1]-2), (left + labelSize[0], top + baseLine),
-                         (255, 255, 255), cv.FILLED)
-            cv.putText(frame, label, (left, top), cv.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0))
+            cv2.rectangle(frame, (left, top - labelSize[1]-2), (left + labelSize[0], top + baseLine),
+                         (255, 255, 255), cv2.FILLED)
+            cv2.putText(frame, label, (left, top), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0))
 
-        def tellRobot(out_center_x, out_center_y, serial_format="XY"):
+        def tellRobot(ser, bbox, frameWidth, frameHeight, serial_format="XY"):
             if bbox is None:
-                jevois.sendSerial("stop")
+                sendSerial(ser, "move -x 0 -y 0 1000")
             else:
-                box_center_x, box_center_y = self.bbox[0] + self.bbox[2]/2, self.bbox[1] + self.bbox[3]/2
-                if serial_format == "XY":
-                    if out_center_x < box_center_x:
-                        move_x = box_center_x - out_center_x
-                    elif box_center_x < out_center_x:
-                        move_x = out_center_x - box_center_x
-                    elif box_center_x == out_center_x:
-                        move_x = 0
-                    if out_center_y < box_center_y:
-                        move_y = box_center_y - out_center_y
-                    elif box_center_y < out_center_y:
-                        move_y = out_center_y - box_center_y
-                    elif box_center_y == out_center_y:
-                        move_y = 0
-                    if move_x < 100:
-                        move_x = 100
-                    if move_y < 100:
-                        move_y = 100                
-                    jevois.sendSerial("move {} {}".format(int(move_x), int(move_y)))
-                else:
-                    jevois.sendSerial("Invalid Serial Format")
+                box_center_x, box_center_y = bbox[0]+bbox[2]/2, bbox[1]+bbox[3]/2
+                out_center_x, out_center_y = frameWidth/2., frameHeight/2.
+                move_x = (out_center_x - box_center_x)
+                move_y = -(out_center_y - box_center_y)
+                move_x = scale(move_x, np.log(frameWidth/2.))
+                move_y = scale(move_y, np.log(frameHeight/2.))
+                sendSerial(ser, "move -x {} -y {} 1000".format(int(move_x), int(move_y)))
 
+        def tellMe(bbox, frameWidth, frameHeight, serial_format="XY"):
+            if bbox is None:
+                print("move -x 0 -y 0 1000")
+            else:
+                box_center_x, box_center_y = bbox[0]+bbox[2]/2, bbox[1]+bbox[3]/2
+                out_center_x, out_center_y = frameWidth/2., frameHeight/2.
+                move_x = (out_center_x - box_center_x)
+                move_y = -(out_center_y - box_center_y)
+                move_x = scale(move_x, np.log(frameWidth/2.))
+                move_y = scale(move_y, np.log(frameHeight/2.))
+                print("move -x {} -y {} 1000".format(int(move_x), int(move_y)))
+            
         layerNames = self.net.getLayerNames()
         lastLayerId = self.net.getLayerId(layerNames[-1])
         lastLayer = self.net.getLayer(lastLayerId)
@@ -281,10 +279,10 @@ class GarbageTracker:
                         confidences.append(float(confidence))
                         boxes.append([left, top, width, height])
         else:
-            jevois.LERROR('Unknown output layer type: ' + lastLayer.type)
+            print('Unknown output layer type: ' + lastLayer.type)
             return
 
-        indices = cv.dnn.NMSBoxes(boxes, confidences, self.confThreshold, self.nmsThreshold)
+        indices = cv2.dnn.NMSBoxes(boxes, confidences, self.confThreshold, self.nmsThreshold)
         for i in indices:
             i = i[0]
             box = boxes[i]
@@ -292,28 +290,27 @@ class GarbageTracker:
             top = box[1]
             width = box[2]
             height = box[3]
-#            drawPred(classIds[i], confidences[i], left, top, left + width, top + height, color=(0, 255, 0))
-            track(classIds[i], confidences[i], box)
+            drawPred(classIds[i], confidences[i], left, top, left + width, top + height, color=(0, 255, 0))
+            #track(classIds[i], confidences[i], box)
             # Tell the robot what to do
-            tellRobot(self.bbox, out_center_x, out_center_y)
+            tellMe(self.bbox, frameWidth, frameHeight)
 
     # ####################################################################################################
     ## JeVois main processing function
-    def process(self, inframe, outframe):
-        frame = inframe.getCvBGR()
-        self.timer.start()
+    def process(self, inframe):
+        frame = inframe
         
         frameHeight = frame.shape[0]
         frameWidth = frame.shape[1]
         out_center_x, out_center_y = frameWidth/2, frameHeight/2
 
         # Create a 4D blob from a frame.
-        blob = cv.dnn.blobFromImage(frame, self.scale, (self.inpWidth, self.inpHeight), self.mean, self.rgb, crop=False)
+        blob = cv2.dnn.blobFromImage(frame, self.scale, (self.inpWidth, self.inpHeight), self.mean, self.rgb, crop=False)
 
         # Run a model
         self.net.setInput(blob)
         if self.net.getLayer(0).outputNameToIndex('im_info') != -1:  # Faster-RCNN or R-FCN
-            frame = cv.resize(frame, (self.inpWidth, self.inpHeight))
+            frame = cv2.resize(frame, (self.inpWidth, self.inpHeight))
             self.net.setInput(np.array([self.inpHeight, self.inpWidth, 1.6], dtype=np.float32), 'im_info')
         outs = self.net.forward(self.getOutputsNames(self.net))
         
@@ -323,16 +320,39 @@ class GarbageTracker:
         msgbox = np.zeros((22, frame.shape[1], 3), dtype = np.uint8) + 80
       
         # Put efficiency information.
-        cv.putText(frame, 'JeVois Python Object Detection DNN - ' + self.model, (3, 15),
-                   cv.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv.LINE_AA)
+        cv2.putText(frame, 'JeVois Python Object Detection DNN - ' + self.model, (3, 15),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
         t, _ = self.net.getPerfProfile()
-        fps = self.timer.stop()
-#        label = fps + ' - Inference time: %.2fms' % (t * 1000.0 / cv.getTickFrequency())
+
+#        label = fps + ' - Inference time: %.2fms' % (t * 1000.0 / cv2.getTickFrequency())
         label = 'bbox: {}'.format(self.bbox)
-        cv.putText(msgbox, label, (3, 15), cv.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv.LINE_AA)
+        cv2.putText(msgbox, label, (3, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
         
         # Stack bottom panel below main image:
-        frame = np.vstack((frame, msgbox))
+        outframe = np.vstack((frame, msgbox))
 
-        # Send output frame to host:
-        outframe.sendCv(frame)
+        return outframe
+
+
+def main():
+    od = GarbageTracker()
+    cap = cv2.VideoCapture(0)
+    time.sleep(0.2)
+    bbox = None
+    while True:
+#        time.sleep(0.5)
+        _, inframe = cap.read()
+        if inframe is None:
+            break
+
+        frameWidth, frameHeight = inframe.shape[0], inframe.shape[1]
+        outframe = od.process(inframe)
+        cv2.imshow("outimg", outframe)
+        
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
+            cv2.destroyAllWindows()
+            break
+    
+if __name__=="__main__":
+    main()
