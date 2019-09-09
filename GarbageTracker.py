@@ -67,15 +67,16 @@ class GarbageTracker:
         self.scale = 2/255       # Value scaling factor applied to input pixels
         self.mean = [127.5, 127.5, 127.5] # Mean BGR value subtracted from input image
         self.rgb = True          # True if model expects RGB inputs, otherwise it expects BGR
+        self.bbox = None
+        self.tracker = cv.TrackerKCF_create()
 
         # Select one of the models:
         #model = 'Face'              # OpenCV Face Detector, Caffe model
         #model = 'MobileNetV2SSD'   # MobileNet v2 + SSD trained on Coco (80 object classes), TensorFlow model
         #model = 'MobileNetSSD'     # MobileNet + SSD trained on Pascal VOC (20 object classes), Caffe model
-        #model = 'MobileNetSSDcoco' # MobileNet + SSD trained on Coco (80 object classes), TensorFlow model
+        model = 'MobileNetSSDcoco' # MobileNet + SSD trained on Coco (80 object classes), TensorFlow model
         #model = 'YOLOv3'           # Darknet Tiny YOLO v3 trained on Coco (80 object classes), Darknet model
         #model = 'YOLOv2'           # Darknet Tiny YOLO v2 trained on Pascal VOC (20 object classes), Darknet model
-        model = 'IG'
 
         # You should not have to edit anything beyond this point.
         backend = cv.dnn.DNN_BACKEND_DEFAULT
@@ -92,7 +93,7 @@ class GarbageTracker:
             modelname = '/jevois/share/opencv-dnn/detection/ssd_mobilenet_v2_coco_2018_03_29.pb'
             configname = '/jevois/share/opencv-dnn/detection/ssd_mobilenet_v2_coco_2018_03_29.pbtxt'
         elif (model == 'MobileNetSSDcoco'):
-            classnames = '/jevois/share/darknet/yolo/data/coco.names'
+            classnames = '/jevois/share/darknet/yolo/data/coconew.names'
             modelname = '/jevois/share/opencv-dnn/detection/ssd_mobilenet_v1_coco_2017_11_17.pb'
             configname = '/jevois/share/opencv-dnn/detection/ssd_mobilenet_v1_coco_2017_11_17.pbtxt'
             self.rgb = False
@@ -107,19 +108,6 @@ class GarbageTracker:
             configname = '/jevois/share/darknet/yolo/cfg/yolov2-tiny-voc.cfg'
             self.inpWidth = 320
             self.inpHeight = 240
-        elif (model == 'IG'):
-            classnames = '/jevois/share/darknet/yolo/data/coconew.names'
-            garbageclasses = ["shoe", "hat", "eye glasses", "frisbee",
-            "bottle", "plate", "wine glass", "cup", "fork", "spoon", "bowl",
-            "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "fruit",
-            "hotdog", "pizza", "donut", "cake",
-            "vase", "scissors", "toothbrush", "cardboard", "napkin",
-            "net", "paper", "plastic", "straw"]
-            modelname = '/jevois/share/opencv-dnn/detection/ssd_mobilenet_v1_coco_2017_11_17.pb'
-            configname = '/jevois/share/opencv-dnn/detection/ssd_mobilenet_v1_coco_2017_11_17.pbtxt'
-            self.rgb = False
-            self.nmsThreshold = 0.1
-            self.confThreshold = 0.3
         else:
             classnames = '/jevois/share/opencv-dnn/detection/opencv_face_detector.classes'
             modelname = '/jevois/share/opencv-dnn/detection/opencv_face_detector.caffemodel'
@@ -139,8 +127,13 @@ class GarbageTracker:
         self.net.setPreferableTarget(target)
         self.timer = jevois.Timer('Neural detection', 10, jevois.LOG_DEBUG)
         self.model = model
-        if self.model=='IG':
-            self.garbageclasses = garbageclasses
+        garbageclasses = ["shoe", "hat", "eye glasses", "frisbee",
+            "bottle", "plate", "wine glass", "cup", "fork", "spoon", "bowl",
+            "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "fruit",
+            "hotdog", "pizza", "donut", "cake",
+            "vase", "scissors", "toothbrush", "cardboard", "napkin",
+            "net", "paper", "plastic", "straw"]
+        self.garbageclasses = garbageclasses
         
     # ####################################################################################################
     ## Get names of the network's output layers
@@ -153,37 +146,70 @@ class GarbageTracker:
     def postprocess(self, frame, outs):
         frameHeight = frame.shape[0]
         frameWidth = frame.shape[1]
+        out_center_x, out_center_y = frameWidth/2, frameHeight/2
 
-        def drawPred(classId, conf, left, top, right, bottom):
-            if self.model == 'IG':
-                if (self.classes[classId] in self.garbageclasses):
-                    # Draw a bounding box.
-                    cv.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-                    label = '%.2f' % (conf * 100)
-                    label = '%s: %s' % (self.classes[classId], label)
-                    jevois.sendSerial('%s (%s, %s) (%s, %s)' %( label, left, top, right, bottom))
-                    labelSize, baseLine = cv.getTextSize(label, cv.FONT_HERSHEY_SIMPLEX, 0.4, 1)
-                    top = max(top, labelSize[1])
-                    cv.rectangle(frame, (left, top - labelSize[1]-2), (left + labelSize[0], top + baseLine),
-                                 (255, 255, 255), cv.FILLED)
-                    cv.putText(frame, label, (left, top), cv.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0))
+        def track(classId, conf, box):
+            # Track the last box on the list
+            if self.bbox is None:
+                left = box[0]
+                top = box[1]
+                width = box[2]
+                height = box[3]
+                self.bbox = (left, top, left + width, top + height)
+                ok = self.tracker.init(frame, self.bbox)
+                drawPred(classId, conf, left, top, left + width, top + height, color=(255, 255, 255))
             else:
-                # Draw a bounding box.
-                cv.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-                label = '%.2f' % (conf * 100)
+                ok, self.bbox = self.tracker.update(frame)
+                if ok:
+                    p1 = (int(self.bbox[0]), int(self.bbox[1]))
+                    p2 = (int(self.bbox[0] + self.bbox[2]), int(self.bbox[1] + self.bbox[3]))
+                    drawPred(classId, conf, p1[0], p1[1], p2[0], p2[1], color=(255, 0, 0))
+                else:
+                    self.bbox = None
 
-                # Print a label of class.
-                if self.classes:
-                    if (classId >= len(self.classes)):
-                        label = 'Oooops id=%d: %s' % (classId, label)
-                    else:
-                        label = '%s: %s' % (self.classes[classId], label)
+        def drawPred(classId, conf, left, top, right, bottom, color=(0,255,0)):
+            # Draw a bounding box.
+            cv.rectangle(frame, (left, top), (right, bottom), color, 2)
+            label = '%.2f' % (conf * 100)
+
+            # Print a label of class.
+            if self.classes:
+                if (classId >= len(self.classes)):
+                    label = 'Oooops id=%d: %s' % (classId, label)
+                else:
+                    label = '%s: %s' % (self.classes[classId], label)
                         
-                labelSize, baseLine = cv.getTextSize(label, cv.FONT_HERSHEY_SIMPLEX, 0.4, 1)
-                top = max(top, labelSize[1])
-                cv.rectangle(frame, (left, top - labelSize[1]-2), (left + labelSize[0], top + baseLine),
-                             (255, 255, 255), cv.FILLED)
-                cv.putText(frame, label, (left, top), cv.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0))
+            labelSize, baseLine = cv.getTextSize(label, cv.FONT_HERSHEY_SIMPLEX, 0.4, 1)
+            top = max(top, labelSize[1])
+            cv.rectangle(frame, (left, top - labelSize[1]-2), (left + labelSize[0], top + baseLine),
+                         (255, 255, 255), cv.FILLED)
+            cv.putText(frame, label, (left, top), cv.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0))
+
+        def tellRobot(out_center_x, out_center_y, serial_format="XY"):
+            if bbox is None:
+                jevois.sendSerial("stop")
+            else:
+                box_center_x, box_center_y = self.bbox[0] + self.bbox[2]/2, self.bbox[1] + self.bbox[3]/2
+                if serial_format == "XY":
+                    if out_center_x < box_center_x:
+                        move_x = box_center_x - out_center_x
+                    elif box_center_x < out_center_x:
+                        move_x = out_center_x - box_center_x
+                    elif box_center_x == out_center_x:
+                        move_x = 0
+                    if out_center_y < box_center_y:
+                        move_y = box_center_y - out_center_y
+                    elif box_center_y < out_center_y:
+                        move_y = out_center_y - box_center_y
+                    elif box_center_y == out_center_y:
+                        move_y = 0
+                    if move_x < 100:
+                        move_x = 100
+                    if move_y < 100:
+                        move_y = 100                
+                    jevois.sendSerial("move {} {}".format(int(move_x), int(move_y)))
+                else:
+                    jevois.sendSerial("Invalid Serial Format")
 
         layerNames = self.net.getLayerNames()
         lastLayerId = self.net.getLayerId(layerNames[-1])
@@ -198,15 +224,17 @@ class GarbageTracker:
             # [batchId, classId, confidence, left, top, right, bottom]
             for out in outs:
                 for detection in out[0, 0]:
+                    classId = int(detection[1]) - 1
                     confidence = detection[2]
-                    if confidence > self.confThreshold:
+                    is_garbage = self.classes[classId] in self.garbageclasses
+                    if (confidence > self.confThreshold) and (is_garbage):
                         left = int(detection[3])
                         top = int(detection[4])
                         right = int(detection[5])
                         bottom = int(detection[6])
                         width = right - left + 1
                         height = bottom - top + 1
-                        classIds.append(int(detection[1]) - 1)  # Skip background label
+                        classIds.append(classId)  # Skip background label
                         confidences.append(float(confidence))
                         boxes.append([left, top, width, height])
                             
@@ -216,15 +244,17 @@ class GarbageTracker:
             # [batchId, classId, confidence, left, top, right, bottom]
             for out in outs:
                 for detection in out[0, 0]:
+                    classId = int(detection[1]) - 1
                     confidence = detection[2]
-                    if confidence > self.confThreshold:
+                    is_garbage = self.classes[classId] in self.garbageclasses
+                    if (confidence > self.confThreshold) and (is_garbage):
                         left = int(detection[3] * frameWidth)
                         top = int(detection[4] * frameHeight)
                         right = int(detection[5] * frameWidth)
                         bottom = int(detection[6] * frameHeight)
                         width = right - left + 1
                         height = bottom - top + 1
-                        classIds.append(int(detection[1]) - 1)  # Skip background label
+                        classIds.append(classId)  # Skip background label
                         confidences.append(float(confidence))
                         boxes.append([left, top, width, height])
         elif lastLayer.type == 'Region':
@@ -239,7 +269,8 @@ class GarbageTracker:
                     scores = detection[5:]
                     classId = np.argmax(scores)
                     confidence = scores[classId]
-                    if confidence > self.confThreshold:
+                    is_garbage = self.classes[classId] in self.garbageclasses
+                    if (confidence > self.confThreshold) and (is_garbage):
                         center_x = int(detection[0] * frameWidth)
                         center_y = int(detection[1] * frameHeight)
                         width = int(detection[2] * frameWidth)
@@ -261,8 +292,11 @@ class GarbageTracker:
             top = box[1]
             width = box[2]
             height = box[3]
-            drawPred(classIds[i], confidences[i], left, top, left + width, top + height)
-            
+#            drawPred(classIds[i], confidences[i], left, top, left + width, top + height, color=(0, 255, 0))
+            track(classIds[i], confidences[i], box)
+            # Tell the robot what to do
+            tellRobot(self.bbox, out_center_x, out_center_y)
+
     # ####################################################################################################
     ## JeVois main processing function
     def process(self, inframe, outframe):
@@ -271,32 +305,19 @@ class GarbageTracker:
         
         frameHeight = frame.shape[0]
         frameWidth = frame.shape[1]
+        out_center_x, out_center_y = frameWidth/2, frameHeight/2
 
-        # Setup the tracker
-        self.tracker = cv2.TrackerKCF_create()
-        self.bbox = None
+        # Create a 4D blob from a frame.
+        blob = cv.dnn.blobFromImage(frame, self.scale, (self.inpWidth, self.inpHeight), self.mean, self.rgb, crop=False)
 
-	if self.bbox is None:
-	        # Create a 4D blob from a frame.
-        	blob = cv.dnn.blobFromImage(frame, self.scale, (self.inpWidth, self.inpHeight), self.mean, self.rgb, crop=False)
-
-        	# Run a model
-        	self.net.setInput(blob)
-        	if self.net.getLayer(0).outputNameToIndex('im_info') != -1:  # Faster-RCNN or R-FCN
-        	    	frame = cv.resize(frame, (self.inpWidth, self.inpHeight))
-        	    	self.net.setInput(np.array([self.inpHeight, self.inpWidth, 1.6], dtype=np.float32), 'im_info')
-        	outs = self.net.forward(self.getOutputsNames(self.net))
+        # Run a model
+        self.net.setInput(blob)
+        if self.net.getLayer(0).outputNameToIndex('im_info') != -1:  # Faster-RCNN or R-FCN
+            frame = cv.resize(frame, (self.inpWidth, self.inpHeight))
+            self.net.setInput(np.array([self.inpHeight, self.inpWidth, 1.6], dtype=np.float32), 'im_info')
+        outs = self.net.forward(self.getOutputsNames(self.net))
         
-        	self.postprocess(frame, outs)
-	else:
-                ok, self.bbox = self.tracker.update(frame)
-                if ok:
-                    p1 = (int(bbox[0]), int(bbox[1]))
-                    p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
-                    box_center_x, box_center_y = bbox[0]+bbox[2]/2, bbox[1]+bbox[3]/2
-                    cv2.rectangle(frame,p1, p2, (0,255,0), 2)
-                else:
-                    self.bbox = None
+        self.postprocess(frame, outs)
 
         # Create dark-gray (value 80) image for the bottom panel, 22 pixels tall:
         msgbox = np.zeros((22, frame.shape[1], 3), dtype = np.uint8) + 80
@@ -306,7 +327,8 @@ class GarbageTracker:
                    cv.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv.LINE_AA)
         t, _ = self.net.getPerfProfile()
         fps = self.timer.stop()
-        label = fps + ' - Inference time: %.2fms' % (t * 1000.0 / cv.getTickFrequency())
+#        label = fps + ' - Inference time: %.2fms' % (t * 1000.0 / cv.getTickFrequency())
+        label = 'bbox: {}'.format(self.bbox)
         cv.putText(msgbox, label, (3, 15), cv.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv.LINE_AA)
         
         # Stack bottom panel below main image:
@@ -314,4 +336,3 @@ class GarbageTracker:
 
         # Send output frame to host:
         outframe.sendCv(frame)
-
