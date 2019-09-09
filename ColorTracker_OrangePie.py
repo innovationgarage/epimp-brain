@@ -4,24 +4,30 @@ import time
 import serial
 
 def openSerialPort():
-#    ser = serial.serial_for_url('/dev/ttyS1')
-    ser = serial.Serial('/dev/ttyACM0')
-    ser.baudrate = 74880
-    ser.timeout = 1
-    return ser
+    try:
+        ser = serial.serial_for_url('/dev/ttyS0')
+        #ser = serial.Serial('/dev/ttyACM0')
+        ser.baudrate = 74880
+        ser.timeout = 1
+        return ser
+    except:
+        print('Opening serial port failed!')
+        return False
 
 def sendSerial(ser, msg):
     if not ser.is_open:
         print('Serial port is not open!')
-        return False
     else:
         msg = "{}\n".format(msg)
         print(msg)
         ser.write(msg.encode())
-        
+
+def normalize(val, maxval):
+    pass
+    
 def tellRobot(ser, bbox, frameWidth, frameHeight, serial_format="XY"):
     if bbox is None:
-        sendSerial(ser, "stop")
+        sendSerial(ser, "move 0, 0, 1000")
     else:
         box_center_x, box_center_y = bbox[0]+bbox[2]/2, bbox[1]+bbox[3]/2
         out_center_x, out_center_y = frameWidth/2., frameHeight/2.
@@ -29,6 +35,16 @@ def tellRobot(ser, bbox, frameWidth, frameHeight, serial_format="XY"):
         move_y = (out_center_y - box_center_y)/(frameHeight/2.)*100.
         sendSerial(ser, "move {} {} 1000".format(int(move_x), int(move_y)))
 
+def tellMe(bbox, frameWidth, frameHeight, serial_format="XY"):
+    if bbox is None:
+        print("0 0")
+    else:
+        box_center_x, box_center_y = bbox[0]+bbox[2]/2, bbox[1]+bbox[3]/2
+        out_center_x, out_center_y = frameWidth/2., frameHeight/2.
+        move_x = -(out_center_x - box_center_x)/(frameWidth/2.)
+        move_y = (out_center_y - box_center_y)/(frameHeight/2.)
+        print("{}, {}".format((move_x), (move_y)))
+        
 def main():
     ser = openSerialPort()
     tracker = cv2.TrackerKCF_create()
@@ -37,7 +53,7 @@ def main():
 
     bbox = None
     while True:
-        time.sleep(0.2)
+        time.sleep(0.1)
         _, img = vs.read()
         if img is None:
             break
@@ -50,11 +66,7 @@ def main():
         ret, thresh = cv2.threshold(blurred, 50, 255, cv2.THRESH_BINARY)
         hsv = cv2.cvtColor(thresh, cv2.COLOR_BGR2HSV)
         mask = np.zeros((thresh.shape[0], thresh.shape[1], 3), np.uint8)
-        
-        # Setup the tracker
-        tracker = cv2.TrackerKCF_create()
-        bbox = None
-        
+                
         # Filter the desired color range
         redLower = (0,10,10)
         redUpper = (40,255,255)
@@ -63,7 +75,7 @@ def main():
         image = cv2.dilate(image, None, iterations=2)
         
         # Find the biggest contour
-        contours, hierarchy = cv2.findContours(image.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        _, contours, hierarchy = cv2.findContours(image.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         contour_sizes = [(cv2.contourArea(contour), contour) for contour in contours]
         if contours:
             biggest_contour = max(contour_sizes, key=lambda x: x[0])[1]
@@ -93,7 +105,10 @@ def main():
         cv2.putText(mask, "current BBOX: " + str(bbox), (100,50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50), 2)
 
         # Tell the robot what to do
-        tellRobot(ser, bbox, frameWidth, frameHeight)
+        if ser:
+            tellRobot(ser, bbox, frameWidth, frameHeight)
+        else:
+            tellMe(bbox, frameWidth, frameHeight)
 
         # Organize the visual output
         toprow = np.hstack((img, blurred))
