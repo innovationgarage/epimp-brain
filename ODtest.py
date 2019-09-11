@@ -5,7 +5,6 @@ import serial
 
 def openSerialPort():
     ser = serial.Serial('/dev/ttyUSB0')
-#    ser = serial.Serial('/dev/ttyACM0')
     ser.baudrate = 115200
     ser.timeout = 1
     return ser
@@ -19,7 +18,7 @@ def sendSerial(ser, msg):
         print(msg)
         ser.write(msg.encode())
 
-def change_res(cap, width, height):
+def changeRes(cap, width, height):
     cap.set(3, width)
     cap.set(4, height)
     return cap
@@ -34,7 +33,7 @@ def scale(x, maxval):
         res = np.log(x)
         return res/maxval*100
 
-def tellMe(bbox, frameWidth, frameHeight, serial_format="XY"):
+def calcMove(bbox, frameWidth, frameHeight, serial_format="XY"):
     if bbox is None:
         return "move -x 0 -y 0 1000"
     else:
@@ -47,7 +46,7 @@ def tellMe(bbox, frameWidth, frameHeight, serial_format="XY"):
         return "move -x {} -y {} 1000".format(int(move_x), int(move_y))
 
 def tellRobot(ser, bbox, frameWidth, frameHeight, serial_format="XY"):
-    sendSerial(ser, tellMe(bbox, frameWidth, frameHeight, serial_format).encode())
+    sendSerial(ser, calcMove(bbox, frameWidth, frameHeight, serial_format).encode())
 
 def drawPred(img, bbox, color=(0,255,0), label=None):
     if bbox is not None:
@@ -65,10 +64,8 @@ def drawPred(img, bbox, color=(0,255,0), label=None):
 def lookForGarbage(img, cvNet, threshold, classes, garbageclasses, draw=False):
     rows = img.shape[0]
     cols = img.shape[1]
-
     cvNet.setInput(cv2.dnn.blobFromImage(img, size=(300, 300), swapRB=True, crop=False))
     cvOut = cvNet.forward()
-
     detections = [d for d in cvOut[0,0,:,:] if float(d[2])>threshold and classes[int(d[1])] in garbageclasses]
     scores = [d[2] for d in cvOut[0,0,:,:] if float(d[2])>threshold and classes[int(d[1])] in garbageclasses]
     if len(scores)>0:
@@ -89,6 +86,7 @@ def lookForGarbage(img, cvNet, threshold, classes, garbageclasses, draw=False):
     return img, bbox
 
 def track(img, tracker, bbox):
+    print(tracker, bbox)
     if tracker is None:
         tracker = cv2.TrackerKCF_create()
         ok = tracker.init(img, bbox)
@@ -100,7 +98,7 @@ def track(img, tracker, bbox):
     return bbox, tracker
             
 def main(model, threshold):
-    if model == 'TF':
+    if model == 'mobileNet':
         modelname = 'TFModels/ssd_mobilenet_v1_ppn_shared_box_predictor_300x300_coco14_sync_2018_07_03/frozen_inference_graph.pb'
         configname = 'TFModels/ssd_mobilenet_v1_ppn_coco.pbtxt'
         classnames = 'TFModels/coconew.names'
@@ -109,7 +107,6 @@ def main(model, threshold):
         configname = 'TFModels/yolov2-tiny.cfg'
         classnames = 'TFModels/coconew.names'
     garbageclasses = [
-#        "person",
         "shoe", "hat", "eye glasses", "frisbee",
         "bottle", "plate", "wine glass", "cup", "fork", "spoon", "bowl",
         "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "fruit",
@@ -123,13 +120,13 @@ def main(model, threshold):
     with open(classnames, 'rt') as f:
         classes = f.read().rstrip('\n').split('\n')
 
-    if model == 'TF':
+    if model == 'mobileNet':
         cvNet = cv2.dnn.readNetFromTensorflow(modelname, configname)
     elif model == 'DarkNet':
         cvNet = cv2.dnn.readNetFromDarknet(configname, modelname)
 
     cap = cv2.VideoCapture(0)
-    cap = change_res(cap, 320, 240)
+    cap = changeRes(cap, 320, 240)
     fps = cap.get(cv2.CAP_PROP_FPS)
     
     print(fps)
@@ -142,29 +139,30 @@ def main(model, threshold):
         print('Opening serial failed')
 
     start = time.time()
-    framecount = 0
+    frameno = 0
     while True:
         _, img = cap.read()
-        framecount += 1
+        frameno += 1
 
         if img is None:
             break
         rows = img.shape[0]
         cols = img.shape[1]
 
-        if framecount%60==0:
+        if frameno%60==0:
             end = time.time()
             time_elapsed = end - start
-            img, bbox = lookForGarbage(img, cvNet, threshold, classes, garbageclasses, draw=True)
-            cv2.putText(img, 'fps: {}'.format(int(framecount/time_elapsed)), (15, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 1, cv2.LINE_AA)
-            cv2.imshow('detect', img)
+            detectframe, bbox = lookForGarbage(img, cvNet, threshold, classes, garbageclasses, draw=True)
+            cv2.putText(detectframe, 'fps: {}'.format(int(frameno/time_elapsed)), (15, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.imshow('detect', detectframe)
         else:
+            print(frameno)
             bbox, tracker = track(img, tracker, bbox)
             end = time.time()
             time_elapsed = end - start
-            cv2.putText(img, 'fps: {}'.format(int(framecount/time_elapsed)), (15, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 1, cv2.LINE_AA)
-            img = drawPred(img, bbox, color=(255,0,0))
-            cv2.imshow('track', img)
+            trackframe = drawPred(img, bbox, color=(255,0,0))
+            cv2.putText(trackframe, 'fps: {}'.format(int(frameno/time_elapsed)), (15, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.imshow('track', trackframe)
             
         resized = cv2.resize(img, (160, 120), interpolation=cv2.INTER_AREA)    
         cv2.imshow('img', img)
@@ -172,9 +170,7 @@ def main(model, threshold):
         # Tell the robot what to do
         if ser:
             tellRobot(ser, bbox, cols, rows)
-            print('fps: {}'.format(framecount/time_elapsed))
-        else:
-            print(tracker, bbox)
+            print('fps: {}'.format(frameno/time_elapsed))
         
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
@@ -183,4 +179,4 @@ def main(model, threshold):
 
 
 if __name__=="__main__":
-    main(model='TF', threshold=0.5)
+    main(model='mobileNet', threshold=0.5)
