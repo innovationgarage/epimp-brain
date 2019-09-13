@@ -27,7 +27,7 @@ import time
 # @distribution Unrestricted
 # @restrictions None
 # @ingroup modules
-class PythonSandbox:
+class ColorTracker:
     # ###################################################################################################
     ## Constructor
     def __init__(self):
@@ -65,8 +65,9 @@ class PythonSandbox:
                     jevois.sendSerial("Invalid Serial Format")
 
         img = inframe.getCvBGR()
-        out_x, out_y = 352, 288
-        out_center_x, out_center_y = out_x/2, out_y/2
+        frameHeight = img.shape[0]
+        frameWidth = img.shape[1]
+        out_center_x, out_center_y = frameWidth/2, frameHeight/2
 
         # Set the frame rate
         time.sleep(0.2)
