@@ -8,17 +8,25 @@ class ObjectTrack:
     Class that tracks the bbos it receives
     """
     
-    def __init__(self, getter=None, detector=None):
+    def __init__(self, getter=None, detector=None, resize_factor=1, grayscale=False):
         self.getter = getter
         self.detector = detector
         self.stopped = False
         self.bbox = None
         self.previous_detection = None
+        self.resize_factor = resize_factor
+        self.grayscale = grayscale
         
     def start(self):
         Thread(target=self.track, args=()).start()
         return self
 
+    def preProcess(self, frame):
+        frame = cv2.resize(frame, (int(frame.shape[1] / self.resize_factor), int(frame.shape[0] / self.resize_factor)))
+        if self.grayscale:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        return frame
+        
     def track(self):
         prctl.set_name('ObjectTrack')
         while not self.stopped:
@@ -26,7 +34,9 @@ class ObjectTrack:
             getterframe = self.getter.frame
             if getterframe is None:
                 continue
-            cols, rows = getterframe[1].shape[0], getterframe[1].shape[1]
+            getterframe = getterframe[1]
+            getterrame = self.preProcess(getterframe)
+            cols, rows = getterframe.shape[0], getterframe.shape[1]
             #track the detected object
             if (detection is not None) and (detection is not self.previous_detection):
                 left = int(detection[3] * cols)
@@ -36,16 +46,19 @@ class ObjectTrack:
                 width = int(right - left)
                 height = int(bottom - top)
                 self.bbox = (left, top, right, bottom)
-                self.tracker = cv2.TrackerKCF_create()
-                ok = self.tracker.init(history[0][1], (left, top, width, height))
+                self.tracker = cv2.TrackerMedianFlow_create()
+                tracker_bbox = (left, top, width, height)
+                tracker_bbox = tuple([int(c/self.resize_factor) for c in tracker_bbox])
+                ok = self.tracker.init(self.preProcess(history[0][1]), tracker_bbox)
                 if DEBUG:  print('Detection', ok, self.bbox)
-                # for frame in history:
-                #     ok, self.bbox = self.tracker.update(frame[1])
-                #     if DEBUG:  print('History', ok, self.bbox)
+                for frame in history:
+                    ok, self.bbox = self.tracker.update(frame[1])
+                    if DEBUG:  print('History', ok, self.bbox)
                 self.previous_detection = detection
             else:
                 if self.previous_detection is not None:
-                    ok, bbox = self.tracker.update(getterframe[1])
+                    ok, tracker_bbox = self.tracker.update(getterframe)
+                    bbox = [int(c*self.resize_factor) for c in tracker_bbox]
                     (left, top, width, height) = bbox
                     self.bbox = (left, top, left+width, top+height)
                     if DEBUG:  print('Camera', ok, self.bbox)
