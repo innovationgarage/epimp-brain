@@ -4,6 +4,7 @@ from CountsPerSec import CountsPerSec
 from VideoGet import VideoGet
 from VideoShow import VideoShow
 from ObjectDetect import ObjectDetect
+from ObjectTrack import ObjectTrack
 import time
 
 def putIterationsPerSec(frame, iterations_per_sec):
@@ -35,19 +36,21 @@ def threadDetect(source=0):
     with open(classnames, 'rt') as f:
         classes = f.read().rstrip('\n').split('\n')
     cvNet = cv2.dnn.readNetFromTensorflow(modelname, configname)
-    threshold = 0.5
+    threshold = 0.3
 
     video_getter = VideoGet(source).start()
     object_detector = ObjectDetect(cvNet, threshold, classes, garbageclasses, video_getter).start()
-    video_shower = VideoShow(video_getter, object_detector).start()
+    object_tracker = ObjectTrack(video_getter, object_detector).start()
+    video_shower = VideoShow(video_getter, object_detector, object_tracker).start()
     
     cps = CountsPerSec().start()
 
     while True:
-        if video_getter.stopped or object_detector.stopped or video_shower.stopped:
+        if video_getter.stopped or object_detector.stopped or video_shower.stopped or object_tracker.stopped:
             video_shower.stop()
             video_getter.stop()
             object_detector.stop()
+            object_tracker.stop()
             break
 
         time.sleep(1)
