@@ -1,6 +1,7 @@
 from threading import Thread
 import cv2
 import prctl
+DEBUG = False
 
 class ObjectTrack:
     """
@@ -32,18 +33,22 @@ class ObjectTrack:
                 top = int(detection[4] * rows)
                 right = int(detection[5] * cols)
                 bottom = int(detection[6] * rows)
+                width = int(right - left)
+                height = int(bottom - top)
                 self.bbox = (left, top, right, bottom)
                 self.tracker = cv2.TrackerKCF_create()
-                ok = self.tracker.init(history[0][1], self.bbox)
-                print('Detection', ok, self.bbox)
+                ok = self.tracker.init(history[0][1], (left, top, width, height))
+                if DEBUG:  print('Detection', ok, self.bbox)
                 # for frame in history:
                 #     ok, self.bbox = self.tracker.update(frame[1])
-                #     print('History', ok, self.bbox)
+                #     if DEBUG:  print('History', ok, self.bbox)
                 self.previous_detection = detection
             else:
                 if self.previous_detection is not None:
-                    ok, self.bbox = self.tracker.update(getterframe[1])
-                    print('Camera', ok, self.bbox)
+                    ok, bbox = self.tracker.update(getterframe[1])
+                    (left, top, width, height) = bbox
+                    self.bbox = (left, top, left+width, top+height)
+                    if DEBUG:  print('Camera', ok, self.bbox)
                 else:
                     self.bbox = None
                     
