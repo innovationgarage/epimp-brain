@@ -40,7 +40,7 @@ def threadDetect(source=0):
 
     video_getter = VideoGet(source).start()
     object_detector = ObjectDetect(cvNet, threshold, classes, garbageclasses, video_getter).start()
-    object_tracker = ObjectTrack(video_getter, object_detector).start()
+    object_tracker = ObjectTrack(video_getter, object_detector, resize_factor=4, grayscale=True).start()
     video_shower = VideoShow(video_getter, object_detector, object_tracker).start()
     
     cps = CountsPerSec().start()
