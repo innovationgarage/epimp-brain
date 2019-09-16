@@ -31,11 +31,11 @@ class ObjectTrack:
         # prctl.set_name('ObjectTrack')
         while not self.stopped:
             detection, history = self.detector.top_detection
-            getterframe = self.getter.frame
-            if getterframe is None:
+            getterframe_all = self.getter.frame
+            if getterframe_all is None:
                 continue
-            getterframe = getterframe[1]
-            getterrame = self.preProcess(getterframe)
+            getterframe_original = getterframe_all[1]
+            getterframe = self.preProcess(getterframe_original)
             cols, rows = getterframe.shape[0], getterframe.shape[1]
             #track the detected object
             if (detection is not None) and (detection is not self.previous_detection):
@@ -51,8 +51,9 @@ class ObjectTrack:
                 tracker_bbox = tuple([int(c/self.resize_factor) for c in tracker_bbox])
                 ok = self.tracker.init(self.preProcess(history[0][1]), tracker_bbox)
                 if DEBUG:  print('Detection', ok, self.bbox)
-                for frame in history:
-                    ok, self.bbox = self.tracker.update(frame[1])
+                for frame_tuple in history:
+                    frame = self.preProcess(frame_tuple[1])
+                    ok, self.bbox = self.tracker.update(frame)
                     if DEBUG:  print('History', ok, self.bbox)
                 self.previous_detection = detection
             else:
