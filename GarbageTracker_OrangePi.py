@@ -75,7 +75,7 @@ class GarbageTracker(object):
             self.ser = None
             print('Opening serial failed')
 
-        self.confThreshold = 0.3 # Confidence threshold (0..1), higher for stricter detection confidence.
+        self.confThreshold = 0.5 # Confidence threshold (0..1), higher for stricter detection confidence.
         self.nmsThreshold = 0.4  # Non-maximum suppression threshold (0..1), higher to remove more duplicate boxes.
         self.inpWidth = 160      # Resized image width passed to network
         self.inpHeight = 120     # Resized image height passed to network
@@ -89,8 +89,10 @@ class GarbageTracker(object):
         #model = 'Face'              # OpenCV Face Detector, Caffe model
         #model = 'MobileNetV2SSD'   # MobileNet v2 + SSD trained on Coco (80 object classes), TensorFlow model
         #model = 'MobileNetSSD'     # MobileNet + SSD trained on Pascal VOC (20 object classes), Caffe model
+        #model = 'MobileNetSSDcoco' # MobileNet + SSD trained on Coco (80 object classes), TensorFlow model
         #model = 'YOLOv3'           # Darknet Tiny YOLO v3 trained on Coco (80 object classes), Darknet model
         #model = 'YOLOv2'           # Darknet Tiny YOLO v2 trained on Pascal VOC (20 object classes), Darknet model
+        model = 'RPi'
 
         #model = 'MobileNetSSDcoco' # MobileNet + SSD trained on Coco (80 object classes), TensorFlow model        
         #model = 'RPi'
@@ -128,7 +130,6 @@ class GarbageTracker(object):
             configname = 'TFModels/faster_rcnn_inception_v2_coco_2018_01_28.pbtxt'
             self.rgb = False
             self.nmsThreshold = 0.1
-            
         elif (model == 'YOLOv3'):
             classnames = '/jevois/share/darknet/yolo/data/coco.names'
             modelname = '/jevois/share/darknet/yolo/weights/yolov3-tiny.weights'
@@ -178,14 +179,14 @@ class GarbageTracker(object):
         frameWidth = frame.shape[1]
         out_center_x, out_center_y = frameWidth/2, frameHeight/2
         
-        def sendSerial(ser, msg):
-            if not ser.is_open:
-                print('Serial port is not open!')
-                return False
-            else:
-                msg = "{}\n".format(msg)
-                print(msg)
-                ser.write(msg.encode())
+    def sendSerial(ser, msg):
+        if not ser.is_open:
+            print('Serial port is not open!')
+            return False
+        else:
+            msg = "{}\n".format(msg)
+            print(msg)
+            ser.write(msg.encode())
 
         def track(classId, conf, box):
             # Track the last box on the list
@@ -396,11 +397,11 @@ def change_res(cap, width, height):
 def main():    
     od = GarbageTracker()
     cap = cv2.VideoCapture(0)
-#    cap = change_res(cap, 320, 240)    
+    cap = change_res(cap, 320, 240)    
     time.sleep(0.2)
     bbox = None
     while True:
-        time.sleep(0.2)
+        time.sleep(0.5)
         _, inframe = cap.read()
         if inframe is None:
             break

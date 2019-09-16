@@ -1,7 +1,7 @@
 from threading import Thread
 import cv2
 import numpy as np
-import prctl
+#import prctl
 import time
 
 class ObjectDetect:
@@ -24,7 +24,7 @@ class ObjectDetect:
         return self
 
     def detect(self):
-        prctl.set_name('ObjectDetect')
+        # prctl.set_name('ObjectDetect')
         while not self.stopped:
             self.detectionno += 1
             if not self.frame:

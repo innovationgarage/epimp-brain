@@ -5,9 +5,9 @@ import serial
 
 def openSerialPort():
     try:
-        ser = serial.serial_for_url('/dev/ttyS0')
+        ser = serial.serial_for_url('/dev/ttyUSB0')
         #ser = serial.Serial('/dev/ttyACM0')
-        ser.baudrate = 74880
+        ser.baudrate = 115200
         ser.timeout = 1
         return ser
     except:
@@ -27,14 +27,15 @@ def normalize(val, maxval):
     
 def tellRobot(ser, bbox, frameWidth, frameHeight, serial_format="XY"):
     if bbox is None:
-        sendSerial(ser, "move 0, 0, 1000")
+        sendSerial(ser, "move -x 0 -y 0 1000")
     else:
         box_center_x, box_center_y = bbox[0]+bbox[2]/2, bbox[1]+bbox[3]/2
         out_center_x, out_center_y = frameWidth/2., frameHeight/2.
         move_x = -(out_center_x - box_center_x)/(frameWidth/2.)*100.
         move_y = (out_center_y - box_center_y)/(frameHeight/2.)*100.
-        sendSerial(ser, "move {} {} 1000".format(int(move_x), int(move_y)))
-
+        sendSerial(ser, "move -x {} -y {} 1000".format(int(move_x), int(move_y)))
+        print(ser.read(size=500))
+        
 def tellMe(bbox, frameWidth, frameHeight, serial_format="XY"):
     if bbox is None:
         print("0 0")
@@ -114,7 +115,7 @@ def main():
         toprow = np.hstack((img, blurred))
         bottomrow = np.hstack((thresh, mask))
         outimg = np.vstack((toprow, bottomrow))
-        cv2.imshow("outimg", outimg)
+        # cv2.imshow("outimg", outimg)
         
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
