@@ -94,6 +94,10 @@ class GarbageTracker(object):
         #model = 'YOLOv2'           # Darknet Tiny YOLO v2 trained on Pascal VOC (20 object classes), Darknet model
         model = 'RPi'
 
+        #model = 'MobileNetSSDcoco' # MobileNet + SSD trained on Coco (80 object classes), TensorFlow model        
+        #model = 'RPi'
+        model = 'FasterRCNN'
+
         # You should not have to edit anything beyond this point.
         backend = cv2.dnn.DNN_BACKEND_DEFAULT
         target = cv2.dnn.DNN_TARGET_CPU
@@ -118,6 +122,12 @@ class GarbageTracker(object):
             classnames = 'TFModels/coconew.names'
             modelname = 'TFModels/ssd_mobilenet_v1_ppn_shared_box_predictor_300x300_coco14_sync_2018_07_03/frozen_inference_graph.pb'
             configname = 'TFModels/ssd_mobilenet_v1_ppn_coco.pbtxt'
+            self.rgb = False
+            self.nmsThreshold = 0.1
+        elif (model == 'FasterRCNN'):
+            classnames = 'TFModels/coconew.names'
+            modelname = 'TFModels/faster_rcnn_inception_v2_coco_2018_01_28/frozen_inference_graph.pb'
+            configname = 'TFModels/faster_rcnn_inception_v2_coco_2018_01_28.pbtxt'
             self.rgb = False
             self.nmsThreshold = 0.1
         elif (model == 'YOLOv3'):
@@ -265,7 +275,7 @@ class GarbageTracker(object):
                     classId = int(detection[1]) - 1
                     confidence = detection[2]
                     is_garbage = self.classes[classId] in self.garbageclasses
-                    if (confidence > self.confThreshold) and (is_garbage):
+                    if (confidence > self.confThreshold):# and (is_garbage):
                         left = int(detection[3])
                         top = int(detection[4])
                         right = int(detection[5])
@@ -285,7 +295,7 @@ class GarbageTracker(object):
                     classId = int(detection[1]) - 1
                     confidence = detection[2]
                     is_garbage = self.classes[classId] in self.garbageclasses
-                    if (confidence > self.confThreshold) and (is_garbage):
+                    if (confidence > self.confThreshold):# and (is_garbage):
                         left = int(detection[3] * frameWidth)
                         top = int(detection[4] * frameHeight)
                         right = int(detection[5] * frameWidth)
@@ -308,7 +318,7 @@ class GarbageTracker(object):
                     classId = np.argmax(scores)
                     confidence = scores[classId]
                     is_garbage = self.classes[classId] in self.garbageclasses
-                    if (confidence > self.confThreshold) and (is_garbage):
+                    if (confidence > self.confThreshold):# and (is_garbage):
                         center_x = int(detection[0] * frameWidth)
                         center_y = int(detection[1] * frameHeight)
                         width = int(detection[2] * frameWidth)
@@ -323,6 +333,7 @@ class GarbageTracker(object):
             return
 
         indices = cv2.dnn.NMSBoxes(boxes, confidences, self.confThreshold, self.nmsThreshold)
+        print('HERE', indices)
         for i in indices:
             i = i[0]
             box = boxes[i]

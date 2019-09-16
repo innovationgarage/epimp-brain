@@ -1,7 +1,17 @@
+from CountsPerSec import CountsPerSec
 import cv2
 import time
 import numpy as np
 import serial
+
+def putIterationsPerSec(frame, iterations_per_sec):
+    """
+    Add iterations per second text to lower-left corner of a frame.
+    """
+    w, h = frame.shape[0], frame.shape[1]
+    cv2.putText(frame, "{:.0f} iterations/sec".format(iterations_per_sec),
+        (15,60), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255))
+    return frame
 
 def openSerialPort():
     ser = serial.Serial('/dev/ttyUSB0')
@@ -15,7 +25,7 @@ def sendSerial(ser, msg):
         return False
     else:
         msg = "{}\n".format(msg)
-        print(msg)
+#        print(msg)
         ser.write(msg.encode())
 
 def changeRes(cap, width, height):
@@ -35,7 +45,7 @@ def scale(x, maxval):
 
 def calcMove(bbox, frameWidth, frameHeight, serial_format="XY"):
     if bbox is None:
-        return "move -x 0 -y 0 1000"
+        return ""#move -x 0 -y 0 1000"
     else:
         box_center_x, box_center_y = bbox[0]+bbox[2]/2, bbox[1]+bbox[3]/2
         out_center_x, out_center_y = frameWidth/2., frameHeight/2.
@@ -46,7 +56,7 @@ def calcMove(bbox, frameWidth, frameHeight, serial_format="XY"):
         return "move -x {} -y {} 1000".format(int(move_x), int(move_y))
 
 def tellRobot(ser, bbox, frameWidth, frameHeight, serial_format="XY"):
-    sendSerial(ser, calcMove(bbox, frameWidth, frameHeight, serial_format).encode())
+    sendSerial(ser, calcMove(bbox, frameWidth, frameHeight, serial_format))
 
 def drawPred(img, bbox, color=(0,255,0), label=None):
     if bbox is not None:
@@ -83,10 +93,10 @@ def lookForGarbage(img, cvNet, threshold, classes, garbageclasses, draw=False):
             img = drawPred(img, bbox, color=(23,230,210), label=label)
     else:
         bbox = None
+    print('detect,{},{}'.format(time.time(), type(bbox)))
     return img, bbox
 
 def track(img, tracker, bbox):
-    print(tracker, bbox)
     if tracker is None:
         tracker = cv2.TrackerKCF_create()
         ok = tracker.init(img, bbox)
@@ -95,6 +105,7 @@ def track(img, tracker, bbox):
         if not ok:
             tracker = None
             bbox = None
+    print('track,{},{}'.format(time.time(), type(bbox)))            
     return bbox, tracker
             
 def main(model, threshold):
@@ -126,17 +137,18 @@ def main(model, threshold):
         cvNet = cv2.dnn.readNetFromDarknet(configname, modelname)
 
     cap = cv2.VideoCapture(0)
-    cap = changeRes(cap, 320, 240)
+    #cap = changeRes(cap, 320, 240)
     fps = cap.get(cv2.CAP_PROP_FPS)
+    cps = CountsPerSec().start()
     
-    print(fps)
+#    print(fps)
     time.sleep(0.2)
 
     try:
         ser = openSerialPort()
     except:
         ser = None
-        print('Opening serial failed')
+#        print('Opening serial failed')
 
     start = time.time()
     frameno = 0
@@ -156,7 +168,7 @@ def main(model, threshold):
             cv2.putText(detectframe, 'fps: {}'.format(int(frameno/time_elapsed)), (15, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 1, cv2.LINE_AA)
             cv2.imshow('detect', detectframe)
         else:
-            print(frameno)
+#            print(frameno)
             bbox, tracker = track(img, tracker, bbox)
             end = time.time()
             time_elapsed = end - start
@@ -164,13 +176,15 @@ def main(model, threshold):
             cv2.putText(trackframe, 'fps: {}'.format(int(frameno/time_elapsed)), (15, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 1, cv2.LINE_AA)
             cv2.imshow('track', trackframe)
             
-        resized = cv2.resize(img, (160, 120), interpolation=cv2.INTER_AREA)    
+        resized = cv2.resize(img, (160, 120), interpolation=cv2.INTER_AREA)
+
+        img = putIterationsPerSec(img, cps.countsPerSec())
         cv2.imshow('img', img)
-    
+        cps.increment()    
         # Tell the robot what to do
         if ser:
             tellRobot(ser, bbox, cols, rows)
-            print('fps: {}'.format(frameno/time_elapsed))
+#            print('fps: {}'.format(frameno/time_elapsed))
         
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
