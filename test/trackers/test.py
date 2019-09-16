@@ -6,7 +6,11 @@ import time
 
 kws = {
     "tracker": "MIL",
-    "scale": 1}
+    "scale": 1,
+    "bbox": "712,170,118,239",
+    "file": "cocecan.webm",
+    "frames": 100
+}
 args = []
 for arg in sys.argv[1:]:
     if arg.startswith("--"):
@@ -23,25 +27,29 @@ if kws.get("help", False):
 --tracker=%(trackers)s
 --scale=1
 --gray
+--bbox=712,170,118,239
+--file=cocecan.webm
+--frames=100
 """ % {"trackers": "|".join(name[len("Tracker"):-len("_create")] for name in dir(cv2) if "Tracker" in name and "create" in name)})
     sys.exit(1)
         
 tracker = None
 
-cap = skvideo.io.vreader("cocecan.webm")
+cap = skvideo.io.vreader(kws["file"])
 
 if not cap:
   print("Error opening video stream or file")
 
 # xmin,ymin,w,h
-bbox = 712, 170, 118, 239
+bbox = tuple(int(i) for i in kws["bbox"].split(","))
 
 factor = int(kws["scale"])
 gray = not not kws.get("gray", False)
 trackercls = kws["tracker"]
+frames = int(kws["frames"])
 
 for idx, frame in enumerate(cap):
-    if idx > 100:
+    if idx > frames:
         print("Speed %s/%s = %s frames/s" % (idx, t1-t0, idx / (t1-t0)))
         break
     trackerframe = frame
