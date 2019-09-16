@@ -1,6 +1,6 @@
 from threading import Thread
 import cv2
-import prctl
+#import prctl
 import time
 import collections
 
@@ -21,7 +21,7 @@ class VideoGet:
         return self
 
     def get(self):
-        prctl.set_name('VideoGet')
+        # prctl.set_name('VideoGet')
         self.stream = cv2.VideoCapture(self.src)
         self.frameno = 0
         (self.grabbed, frame) = self.stream.read()

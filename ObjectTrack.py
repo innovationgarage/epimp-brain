@@ -1,6 +1,6 @@
 from threading import Thread
 import cv2
-import prctl
+#import prctl
 DEBUG = False
 
 class ObjectTrack:
@@ -28,7 +28,7 @@ class ObjectTrack:
         return frame
         
     def track(self):
-        prctl.set_name('ObjectTrack')
+        # prctl.set_name('ObjectTrack')
         while not self.stopped:
             detection, history = self.detector.top_detection
             getterframe = self.getter.frame

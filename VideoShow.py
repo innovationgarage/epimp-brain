@@ -2,7 +2,7 @@ from threading import Thread
 import cv2
 import numpy as np
 import time
-import prctl
+#import prctl
 
 class VideoShow:
     """
@@ -20,7 +20,7 @@ class VideoShow:
         return self
 
     def show(self):
-        prctl.set_name('VideoShow')
+        # prctl.set_name('VideoShow')
         while not self.stopped:
             time.sleep(0.1)
             frame = self.getter.frame
