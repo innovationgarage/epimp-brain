@@ -61,7 +61,21 @@ class GarbageTracker(object):
     # ####################################################################################################
     ## Constructor
     def __init__(self):
-        self.confThreshold = 0.5 # Confidence threshold (0..1), higher for stricter detection confidence.
+
+        def openSerialPort():
+            ser = serial.serial_for_url('/dev/ttyUSB0')
+            ser = serial.Serial('/dev/ttyACM0')
+            ser.baudrate = 115200
+            ser.timeout = 1
+            return ser
+        
+        try:
+            self.ser = openSerialPort()
+        except:
+            self.ser = None
+            print('Opening serial failed')
+
+        self.confThreshold = 0.3 # Confidence threshold (0..1), higher for stricter detection confidence.
         self.nmsThreshold = 0.4  # Non-maximum suppression threshold (0..1), higher to remove more duplicate boxes.
         self.inpWidth = 160      # Resized image width passed to network
         self.inpHeight = 120     # Resized image height passed to network
@@ -75,9 +89,12 @@ class GarbageTracker(object):
         #model = 'Face'              # OpenCV Face Detector, Caffe model
         #model = 'MobileNetV2SSD'   # MobileNet v2 + SSD trained on Coco (80 object classes), TensorFlow model
         #model = 'MobileNetSSD'     # MobileNet + SSD trained on Pascal VOC (20 object classes), Caffe model
-        model = 'MobileNetSSDcoco' # MobileNet + SSD trained on Coco (80 object classes), TensorFlow model
         #model = 'YOLOv3'           # Darknet Tiny YOLO v3 trained on Coco (80 object classes), Darknet model
         #model = 'YOLOv2'           # Darknet Tiny YOLO v2 trained on Pascal VOC (20 object classes), Darknet model
+
+        #model = 'MobileNetSSDcoco' # MobileNet + SSD trained on Coco (80 object classes), TensorFlow model        
+        #model = 'RPi'
+        model = 'FasterRCNN'
 
         # You should not have to edit anything beyond this point.
         backend = cv2.dnn.DNN_BACKEND_DEFAULT
@@ -99,6 +116,19 @@ class GarbageTracker(object):
             configname = 'TFModels/ssd_mobilenet_v1_coco_2017_11_17.pbtxt'
             self.rgb = False
             self.nmsThreshold = 0.1
+        elif (model == 'RPi'):
+            classnames = 'TFModels/coconew.names'
+            modelname = 'TFModels/ssd_mobilenet_v1_ppn_shared_box_predictor_300x300_coco14_sync_2018_07_03/frozen_inference_graph.pb'
+            configname = 'TFModels/ssd_mobilenet_v1_ppn_coco.pbtxt'
+            self.rgb = False
+            self.nmsThreshold = 0.1
+        elif (model == 'FasterRCNN'):
+            classnames = 'TFModels/coconew.names'
+            modelname = 'TFModels/faster_rcnn_inception_v2_coco_2018_01_28/frozen_inference_graph.pb'
+            configname = 'TFModels/faster_rcnn_inception_v2_coco_2018_01_28.pbtxt'
+            self.rgb = False
+            self.nmsThreshold = 0.1
+            
         elif (model == 'YOLOv3'):
             classnames = '/jevois/share/darknet/yolo/data/coco.names'
             modelname = '/jevois/share/darknet/yolo/weights/yolov3-tiny.weights'
@@ -147,6 +177,15 @@ class GarbageTracker(object):
         frameHeight = frame.shape[0]
         frameWidth = frame.shape[1]
         out_center_x, out_center_y = frameWidth/2, frameHeight/2
+        
+        def sendSerial(ser, msg):
+            if not ser.is_open:
+                print('Serial port is not open!')
+                return False
+            else:
+                msg = "{}\n".format(msg)
+                print(msg)
+                ser.write(msg.encode())
 
         def track(classId, conf, box):
             # Track the last box on the list
@@ -185,6 +224,16 @@ class GarbageTracker(object):
                          (255, 255, 255), cv2.FILLED)
             cv2.putText(frame, label, (left, top), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0))
 
+        def scale(x, maxval):
+            if x == 0:
+                return 0
+            elif x<0:
+                res = np.log(-x)
+                return -(res/maxval*100)
+            elif x>0:
+                res = np.log(x)
+                return res/maxval*100
+        
         def tellRobot(ser, bbox, frameWidth, frameHeight, serial_format="XY"):
             if bbox is None:
                 sendSerial(ser, "move -x 0 -y 0 1000")
@@ -208,7 +257,7 @@ class GarbageTracker(object):
                 move_x = scale(move_x, np.log(frameWidth/2.))
                 move_y = scale(move_y, np.log(frameHeight/2.))
                 print("move -x {} -y {} 1000".format(int(move_x), int(move_y)))
-            
+                        
         layerNames = self.net.getLayerNames()
         lastLayerId = self.net.getLayerId(layerNames[-1])
         lastLayer = self.net.getLayer(lastLayerId)
@@ -225,7 +274,7 @@ class GarbageTracker(object):
                     classId = int(detection[1]) - 1
                     confidence = detection[2]
                     is_garbage = self.classes[classId] in self.garbageclasses
-                    if (confidence > self.confThreshold) and (is_garbage):
+                    if (confidence > self.confThreshold):# and (is_garbage):
                         left = int(detection[3])
                         top = int(detection[4])
                         right = int(detection[5])
@@ -245,7 +294,7 @@ class GarbageTracker(object):
                     classId = int(detection[1]) - 1
                     confidence = detection[2]
                     is_garbage = self.classes[classId] in self.garbageclasses
-                    if (confidence > self.confThreshold) and (is_garbage):
+                    if (confidence > self.confThreshold):# and (is_garbage):
                         left = int(detection[3] * frameWidth)
                         top = int(detection[4] * frameHeight)
                         right = int(detection[5] * frameWidth)
@@ -268,7 +317,7 @@ class GarbageTracker(object):
                     classId = np.argmax(scores)
                     confidence = scores[classId]
                     is_garbage = self.classes[classId] in self.garbageclasses
-                    if (confidence > self.confThreshold) and (is_garbage):
+                    if (confidence > self.confThreshold):# and (is_garbage):
                         center_x = int(detection[0] * frameWidth)
                         center_y = int(detection[1] * frameHeight)
                         width = int(detection[2] * frameWidth)
@@ -283,6 +332,7 @@ class GarbageTracker(object):
             return
 
         indices = cv2.dnn.NMSBoxes(boxes, confidences, self.confThreshold, self.nmsThreshold)
+        print('HERE', indices)
         for i in indices:
             i = i[0]
             box = boxes[i]
@@ -291,9 +341,13 @@ class GarbageTracker(object):
             width = box[2]
             height = box[3]
             drawPred(classIds[i], confidences[i], left, top, left + width, top + height, color=(0, 255, 0))
-            #track(classIds[i], confidences[i], box)
+            # track(classIds[i], confidences[i], box)
             # Tell the robot what to do
-            tellMe(self.bbox, frameWidth, frameHeight)
+            if ser:
+                tellRobot(self.ser, self.bbox, frameWidth, frameHeight)
+            else:
+                tellMe(self.bbox, frameWidth, frameHeight)
+            
 
     # ####################################################################################################
     ## JeVois main processing function
@@ -334,13 +388,19 @@ class GarbageTracker(object):
         return outframe
 
 
-def main():
+def change_res(cap, width, height):
+    cap.set(3, width)
+    cap.set(4, height)
+    return cap
+
+def main():    
     od = GarbageTracker()
     cap = cv2.VideoCapture(0)
+#    cap = change_res(cap, 320, 240)    
     time.sleep(0.2)
     bbox = None
     while True:
-#        time.sleep(0.5)
+        time.sleep(0.2)
         _, inframe = cap.read()
         if inframe is None:
             break

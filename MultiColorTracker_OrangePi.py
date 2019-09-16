@@ -4,7 +4,7 @@ import time
 import serial
 
 def openSerialPort():
-    ser = serial.serial_for_url('/dev/ttyS1')
+    ser = serial.serial_for_url('/dev/ttyUSB0')
 #    ser = serial.Serial('/dev/ttyACM0')
     ser.baudrate = 115200
     ser.timeout = 1
@@ -52,21 +52,27 @@ def tellMe(bbox, frameWidth, frameHeight, serial_format="XY"):
         move_x = scale(move_x, np.log(frameWidth/2.))
         move_y = scale(move_y, np.log(frameHeight/2.))
         print("move -x {} -y {} 1000".format(int(move_x), int(move_y)))
-        
+
+def change_res(cap, width, height):
+    cap.set(3, width)
+    cap.set(4, height)
+    return cap
+
 def main():
     try:
         ser = openSerialPort()
     except:
         ser = None
         print('Opening serial failed')
-        #tracker = cv2.TrackerKCF_create()
         
     cap = cv2.VideoCapture(0)
+    cap = change_res(cap, 320, 240)
+    #tracker = cv2.TrackerKCF_create()
     time.sleep(0.2)
 
     bbox = None
     while True:
-        time.sleep(0.5)
+        #time.sleep(0.1)
         _, img = cap.read()
         if img is None:
             break
@@ -81,7 +87,6 @@ def main():
         mask = np.zeros((thresh.shape[0], thresh.shape[1], 3), np.uint8)
         
         # Setup the tracker
-        #tracker = cv2.TrackerKCF_create()
         bbox = None
         
         # # Filter the desired color range
@@ -130,7 +135,7 @@ def main():
         if contours:
             biggest_contour = max(contour_sizes, key=lambda x: x[0])[1]
             x,y,w,h = cv2.boundingRect(biggest_contour)
-            if (w>50) and (h>50):
+            if (w>10) and (h>10):
                 box_center_x, box_center_y = x+w/2, y+h/2
                 #cv2.rectangle(mask, (x,y), (x+w,y+h), (0,255,0), 2)
                 cv2.drawContours(mask, [biggest_contour], -1, 255, -1)
@@ -155,7 +160,7 @@ def main():
         else:
             bbox = None
 
-        cv2.putText(mask, "current BBOX: " + str(bbox), (100,50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50), 2)
+        cv2.putText(mask, "current BBOX: " + str(bbox), (100,50), cv2.FONT_HERSHEY_SIMPLEX, 0.25, (50,170,50), 2)
 
         # Tell the robot what to do
         if ser:
@@ -166,8 +171,18 @@ def main():
         toprow = np.hstack((img, blurred))
         bottomrow = np.hstack((thresh, mask))
         outimg = np.vstack((toprow, bottomrow))
-#        cv2.imshow("outimg", outimg)
-        
+
+        onerow = np.hstack((blurred, mask))
+        cv2.imshow("outimg", onerow)
+
+        # cv2.namedWindow("outimg", cv2.WINDOW_NORMAL)
+        # scale_percentage = 10
+        # width = int(onerow.shape[1] * scale_percentage / 100)
+        # height = int(onerow.shape[0] * scale_percentage / 100)
+        # dim = (width, height)
+        # resized = cv2.resize(onerow, dim, interpolation=cv2.INTER_AREA) 
+        # cv2.imshow("outimg", resized)
+
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
             cv2.destroyAllWindows()
