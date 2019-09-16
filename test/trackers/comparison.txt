@@ -1,0 +1,30 @@
+Tracker=CSRT, factor=1, gray=False, shape=(540, 960, 3): Speed 101/7.684743404388428 = 13.142924192149763 frames/s
+Tracker=KCF, factor=1, gray=False, shape=(540, 960, 3): Speed 101/9.202530145645142 = 10.975242504127587 frames/s
+Tracker=MIL, factor=1, gray=False, shape=(540, 960, 3): Speed 101/8.362418174743652 = 12.077846131283207 frames/s
+Tracker=MOSSE, factor=1, gray=False, shape=(540, 960, 3): Speed 101/3.2482407093048096 = 31.0937547548981 frames/s
+Tracker=MedianFlow, factor=1, gray=False, shape=(540, 960, 3): Speed 101/3.5237061977386475 = 28.663002626273766 frames/s
+Tracker=TLD, factor=1, gray=False, shape=(540, 960, 3): Speed 101/8.096023559570312 = 12.475260139356667 frames/s
+
+Tracker=Boosting, factor=4, gray=False, shape=(135, 240, 3): Speed 101/4.654704809188843 = 21.69847587340364 frames/s
+Tracker=CSRT, factor=4, gray=False, shape=(135, 240, 3): Speed 101/5.640284776687622 = 17.906897257644218 frames/s
+Tracker=GOTURN, factor=4, gray=False, shape=(135, 240, 3): Tracker=KCF, factor=4, gray=False, shape=(135, 240, 3): Speed 101/3.787447214126587 = 26.66703832156017 frames/s
+Tracker=MIL, factor=4, gray=False, shape=(135, 240, 3): Speed 101/8.119879961013794 = 12.438607526827258 frames/s
+Tracker=MOSSE, factor=4, gray=False, shape=(135, 240, 3): Speed 101/3.065520763397217 = 32.947093755147684 frames/s
+Tracker=MedianFlow, factor=4, gray=False, shape=(135, 240, 3): Speed 101/3.2868049144744873 = 30.72893056573406 frames/s
+Tracker=TLD, factor=4, gray=False, shape=(135, 240, 3): Speed 101/5.485903978347778 = 18.41082169841747 frames/s
+
+Tracker=CSRT, factor=1, gray=True, shape=(540, 960): Speed 101/8.995002031326294 = 11.228457719993173 frames/s
+Tracker=KCF, factor=1, gray=True, shape=(540, 960): Speed 101/5.4489426612854 = 18.535706150406472 frames/s
+Tracker=MIL, factor=1, gray=True, shape=(540, 960): Speed 101/7.757538080215454 = 13.019594484181361 frames/s
+Tracker=MOSSE, factor=1, gray=True, shape=(540, 960): Speed 101/3.230419158935547 = 31.2652925304221 frames/s
+Tracker=MedianFlow, factor=1, gray=True, shape=(540, 960): Speed 101/3.517848491668701 = 28.71073050451083 frames/s
+Tracker=TLD, factor=1, gray=True, shape=(540, 960): Speed 101/7.763626575469971 = 13.009384083351017 frames/s
+
+Tracker=CSRT, factor=4, gray=True, shape=(135, 240): Speed 101/5.8678388595581055 = 17.212469942912865 frames/s
+Tracker=KCF, factor=4, gray=True, shape=(135, 240): Speed 101/3.412766695022583 = 29.594756696174233 frames/s
+Tracker=MIL, factor=4, gray=True, shape=(135, 240): Speed 101/7.849362850189209 = 12.867286418994555 frames/s
+Tracker=MOSSE, factor=4, gray=True, shape=(135, 240): Speed 101/3.0327727794647217 = 33.30285759747102 frames/s
+Tracker=MedianFlow, factor=4, gray=True, shape=(135, 240): Speed 101/3.2531700134277344 = 31.04664053311507 frames/s
+Tracker=TLD, factor=4, gray=True, shape=(135, 240): Speed 101/5.487041473388672 = 18.40700502991181 frames/s
+Tracker=Boosting, factor=1, gray=False, shape=(540, 960, 3): Speed 101/9.88282036781311 = 10.219754709793381 frames/s
+

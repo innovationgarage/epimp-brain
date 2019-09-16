@@ -1,0 +1,7 @@
+for gray in --gray ""; do
+  for scale in 1 4; do
+    for tracker in Boosting CSRT GOTURN KCF MIL MOSSE MedianFlow TLD; do
+      python test.py --scale=$scale $gray --tracker=$tracker
+    done
+  done
+done
