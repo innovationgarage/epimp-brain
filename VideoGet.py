@@ -3,6 +3,7 @@ import cv2
 #import prctl
 import time
 import collections
+DEBUG = False
 
 class VideoGet:
     """
@@ -27,7 +28,7 @@ class VideoGet:
         (self.grabbed, frame) = self.stream.read()
         assert frame is not None, "Unable to open Vide stream"
         self.frame = (self.frameno, frame)
-        print('W, H', self.frame[1].shape)
+        if DEBUG:  print('W, H', self.frame[1].shape)
         self.frames.append(self.frame)
         self.cnt = 0
         while not self.stopped:

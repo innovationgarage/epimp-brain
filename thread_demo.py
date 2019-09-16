@@ -15,7 +15,7 @@ def putIterationsPerSec(frame, iterations_per_sec):
         (10, 450), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255))
     return frame
 
-def threadDetect(source=0):
+def threadDetect(args):
     """
     Dedicated thread for grabbing video frames with VideoGet object.
     Dedicated thread for showing video frames with VideoShow object.
@@ -32,7 +32,11 @@ def threadDetect(source=0):
         "hotdog", "pizza", "donut", "cake",
         "vase", "scissors", "toothbrush", "cardboard", "napkin",
         "net", "paper", "plastic", "straw"
-    ]    
+    ]
+    source = args['source']
+    resize_factor = args['resize_factor']
+    grayscale = args['grayscale']
+    
     with open(classnames, 'rt') as f:
         classes = f.read().rstrip('\n').split('\n')
     cvNet = cv2.dnn.readNetFromTensorflow(modelname, configname)
@@ -40,7 +44,7 @@ def threadDetect(source=0):
 
     video_getter = VideoGet(source).start()
     object_detector = ObjectDetect(cvNet, threshold, classes, garbageclasses, video_getter).start()
-    object_tracker = ObjectTrack(video_getter, object_detector, resize_factor=4, grayscale=True).start()
+    object_tracker = ObjectTrack(video_getter, object_detector, resize_factor, grayscale).start()
     video_shower = VideoShow(video_getter, object_detector, object_tracker).start()
     
     cps = CountsPerSec().start()
@@ -56,6 +60,10 @@ def threadDetect(source=0):
         time.sleep(1)
     
 def main():
+    """
+    USAGE:
+    python thread_demo.py -t detect --resize factor 2 --grayscale
+    """
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", "-s", default=0,
         help="Path to video file or integer representing webcam index"
@@ -65,6 +73,16 @@ def main():
             + " show (video show in its own thread), both"
             + " (video read and video show in their own threads),"
             + " none (default--no multithreading)")
+    ap.add_argument("--resize_factor", "-rf",
+                    type=int,
+                    default=1,
+                    help="Shrinking factor to use when sending the frame to the tracker"
+                    + " (default 1).")
+    ap.add_argument("--grayscale", "-gs",
+                    action='store_true',
+                    help="Whether to grayscale the frame before sending to tracker"
+                    + " (default False).")
+    
     args = vars(ap.parse_args())
 
     if args["thread"] == "both":
@@ -74,7 +92,7 @@ def main():
     elif args["thread"] == "show":
         threadVideoShow(args["source"])
     elif args["thread"] == "detect":
-        threadDetect(args["source"])
+        threadDetect(args)
     else:
         noThreading(args["source"])
 
